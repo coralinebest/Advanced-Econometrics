@@ -1,0 +1,229 @@
+---
+title: "Midterm project advanced econometrics"
+author: "Coraline Best"
+date: "2023-09-27"
+output: html_document
+---
+Cleaning and setting up the data
+```{r}
+#Loading packages
+library(pacman)
+p_load(tidyverse, data.table, broom, parallel, here, plotly, ggplot2, stargazer, magrittr,skimr,janitor,  tidymodels, ADAPTS, caret, yardstick, rlang, parsnip, sandwich, lmtest, haven, tinytex, rdrobust,dplyr, plotrix, plyr,readxl, usmap, stringr, finalfit, scales,tidyr, gridExtra, patchwork, EventStudy, fixest,kableExtra,wesanderson, gtsummary, maps, cowplot, corrplot, ggcorrplot, ggthemes,wesanderson, mgcv, lmtest)
+
+#Loading working directories
+setwd("/Users/coraline/Desktop/Master2/Advanced econometrics/Midterm project")
+
+happiness_data= read_csv("2019.csv")
+
+#To check if there is missing values
+skim(happiness_data)
+
+#dropping missing values
+happiness_data%>% drop_na()
+
+#Changing the names
+colnames(happiness_data)[1]<-"overall_rank"
+colnames(happiness_data)[2]<- "region"
+colnames(happiness_data)[3]<-"score"
+colnames(happiness_data)[4]<-"gdp_per_capita"
+colnames(happiness_data)[5]<- "social_support"
+colnames(happiness_data)[6]<- "healthy_life_expectancy"
+colnames(happiness_data)[7]<- "freedom_to_make_life_choices"
+colnames(happiness_data)[8]<- "generosity"
+colnames(happiness_data)[9]<-"perceptions_of_corruption"
+```
+
+Descriptive statistics
+```{r }
+#Map of the world
+world_map <- map_data("world")
+
+happiness_data[103,2]<- "Republic of Congo"
+happiness_data[127,2]<-"Democratic Republic of the Congo"
+happiness_data[19,2]<-"USA"
+happiness_data[15,2]<-"UK"
+
+#Adding missing countries to the dataset
+nouveaux_pays <- data.frame(
+  "overall_rank" = c(NA,NA,NA,NA,NA),
+  "region" = c("Guyana","Suriname", "Angola", "Sudan", "Greenland"),
+  "score" = c(NA, NA, NA,NA,NA),  
+  "gdp_per_capita"= c(NA, NA, NA,NA,NA),
+  "social_support"=c(NA, NA, NA,NA,NA),
+  "healthy_life_expectancy"= c(NA, NA, NA,NA,NA),
+  "freedom_to_make_life_choices"= c(NA, NA, NA,NA,NA),
+  "generosity"= c(NA, NA, NA,NA,NA),
+  "perceptions_of_corruption"= c(NA, NA, NA,NA,NA)
+  )
+
+happiness_data <- rbind(happiness_data, nouveaux_pays)
+
+happiness_map_world <- left_join(happiness_data, world_map, by = "region")
+
+map1= ggplot(happiness_map_world, aes(map_id = region, fill = `score`)) + geom_map( map = happiness_map_world, color= "white") + expand_limits(x = happiness_map_world$long, y = happiness_map_world$lat) + scale_fill_viridis_c(option = "D") + ggtitle("Geographical Distribution of Happiness Scores") + theme_bw()+ xlab("Longitude") + ylab("Latitude")
+map1
+```
+Tableau de Stat descriptive que je ferai plus clean en Latex après
+```{r}
+summary(happiness_data)
+```
+
+Correlation Matrix
+```{r}
+correlation_data <- happiness_data[, c("score", "gdp_per_capita", "social_support", "healthy_life_expectancy", "freedom_to_make_life_choices", "generosity", "perceptions_of_corruption")]
+correlation_data <- na.omit(correlation_data)
+
+correlation_data <- sapply(correlation_data, as.numeric)
+
+matrice_cor <- cor(correlation_data)
+
+
+correlation_plot <- corrplot(
+  matrice_cor, 
+  method = "color",
+  addCoef.col = "black",
+  tl.srt = 25,
+  type = "full",
+  tl.col = "black",
+  bg = "white",
+  mar = c(0, 0, 1, 0),  
+  tl.cex = 0.5,
+  addrect=7
+)
+
+```
+
+Some graphical representations
+```{r}
+#Analizing regressions
+graph_reg1= ggplot(happiness_data,aes(x=gdp_per_capita, y=score))+ geom_point(col="#E6AB02")+ geom_smooth(method="lm", col= "#66A61E")+ theme_classic()+xlab("GDP per capita")+ ylab("Happiness score")
+graph_reg1
+
+graph_reg2= ggplot(happiness_data,aes(x=social_support, y=score))+ geom_point(col="#E6AB02")+ geom_smooth(method="lm", col= "#66A61E")+ theme_classic() + ylab("Happiness score") + xlab("Social support")
+graph_reg2
+
+graph_reg3= ggplot(happiness_data,aes(x=generosity, y=score))+ geom_point(col="#E6AB02")+ geom_smooth(method="lm", col= "#66A61E")+ theme_classic() + ylab("Happiness score") + xlab("Generosity")
+graph_reg3
+
+graph_reg4= ggplot(happiness_data,aes(x=healthy_life_expectancy, y=score))+ geom_point(col="#E6AB02")+ geom_smooth(method="lm", col= "#66A61E")+ theme_classic()+ ylab("Happiness score")+ xlab("Life expectancy")
+graph_reg4
+
+total= graph_reg1+ graph_reg2+ graph_reg3 + graph_reg4
+
+combined_plots <- plot_grid(graph_reg1, graph_reg2, graph_reg3, graph_reg4)
+combined_plots
+
+title <- ggdraw() + 
+  draw_label(
+    "Exploring the Impact of Various Factors on Happiness Score",
+    fontface = 'bold',
+    x = 0,
+    hjust = 0
+  ) +
+  theme(
+    plot.margin = margin(0, 0, 0, 7)
+  )
+plot_grid(
+  title, combined_plots,
+  ncol = 1,
+  rel_heights = c(0.1, 1)
+)
+
+#couleur= "#1B9E77" ,"#D95F02", "#7570B3" "#E7298A" "#66A61E" "#E6AB02" "#A6761D""#2D2D2D2D"
+```
+
+1) Standard parametric econometrics methods:
+```{r}
+#Linear regression using the lm function, without robust SE
+linear_reg<- lm(score~ gdp_per_capita+ social_support+ healthy_life_expectancy+freedom_to_make_life_choices, data= happiness_data)
+
+#Breusch-Pagan test for heteroscedasticity
+ bptest(linear_reg)
+
+# Calculate heteroscedasticity-robust standard errors using the White estimator
+white_estimator <- coeftest(linear_reg, vcov = vcovHC(linear_reg, type = "HC3"))
+
+tableau_1= stargazer(linear_reg, white_estimator,
+                     title = "OLS results", 
+                     type= "latex",
+                     align=TRUE,
+                     covariate.labels = c("GDP per capita", "Social support", "Healthy life expectancy","Freedom to make life choices"))
+tableau_1
+```
+Non parametric econometrics model
+```{r}
+model_gam= gam(score~ s(freedom_to_make_life_choices) +s(gdp_per_capita)+ s(social_support)+ s(healthy_life_expectancy), data= happiness_data)
+
+summary(model_gam)
+
+table_gam= stargazer(model_gam, type="text",title= "Gam model results")
+```
+```{r}
+par(mfrow=c(2,2))
+plot(model_gam, shade = T, shade.col = "#7570B3")
+```
+
+
+
+```{r}
+model_gam2<-gam(score~social_support +
+             freedom_to_make_life_choices+
+               s(gdp_per_capita) +
+               s(healthy_life_expectancy), data=happiness_data)
+summary(model_gam2)
+
+
+par(mfrow=c(1,1))
+#plot(model_gam2,shade=T,shade.col="#7570B3")
+```
+
+
+
+```{r}
+model_gam3<-gam(score~social_support +
+             freedom_to_make_life_choices+
+           +s(gdp_per_capita,healthy_life_expectancy), data=happiness_data)
+summary(model_gam3)
+```
+
+
+```{r}
+#Gam representation
+semip= gam(score~social_support + s(healthy_life_expectancy)+ s(gdp_per_capita, freedom_to_make_life_choices), data=happiness_data)
+graph_gam_modified= vis.gam(model_gam2, view = c("gdp_per_capita", "freedom_to_make_life_choices"),phi = 30, xlab = "GDP per capita",ylab = "Freedom to make life choices")
+
+vis.gam(semip, view=c("gdp_per_capita", "freedom_to_make_life_choices"), phi=40)
+```
+
+
+
+
+
+
+
+
+```{r}
+poly_lm= lm(data=happiness_data, score~poly(gdp_per_capita, 5.806)+ social_support+ poly(healthy_life_expectancy, 7.332)+ freedom_to_make_life_choices)
+```
+
+```{r}
+piecewise= gam(score~ healthy_life_expectancy + I((healthy_life_expectancy - 0.32)* (healthy_life_expectancy >= 0.32)) +I((healthy_life_expectancy - 0.55)* (healthy_life_expectancy >= 0.55)) +I((healthy_life_expectancy - 0.9)* (healthy_life_expectancy >= 0.9)) +gdp_per_capita + I((gdp_per_capita - 0.7)* (gdp_per_capita >= 0.7)) +I((gdp_per_capita - 1)* (gdp_per_capita >= 1)) +freedom_to_make_life_choices+ social_support, data= happiness_data)
+
+polynomial <- lm(data = happiness_data, score
+              ~ poly(gdp_per_capita, 5)          
+              + social_support
+              + poly(healthy_life_expectancy, 7)
+              + freedom_to_make_life_choices)
+
+
+
+summary(piecewise)
+summary(polynomial)
+
+
+
+tableau_1= stargazer(piecewise,polynomial, title = "OLS results", result = 'text')
+tableau_1
+```
+
+
