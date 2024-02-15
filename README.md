@@ -1,7 +1,7 @@
 # Advanced Econometrics
 
 ## Overview:
-This report explores the determinants of the world happiness score using parametric and nonparametric econometric models. The analysis includes standard linear regression, Generalized Additive Models (GAM), and parametric models inspired by the insights from GAM.
+This report explores the determinants of the world happiness score using parametric and nonparametric econometric models in R. The analysis includes standard linear regression, Generalized Additive Models (GAM), and parametric models inspired by the insights from GAM.
 
 ## Presentation of the Application:
 
